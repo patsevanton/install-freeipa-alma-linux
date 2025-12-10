@@ -1,20 +1,20 @@
 resource "yandex_vpc_network" "main" {
-  name = "example-network"
+  name = "freeipa-network"
 }
 
 resource "yandex_vpc_subnet" "subnet" {
-  name           = "example-subnet"
+  name           = "freeipa-subnet"
   zone           = "ru-central1-a"
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = ["10.0.0.0/24"]
 }
 
 data "yandex_compute_image" "ubuntu" {
-  family = "ubuntu-2204-lts"
+  family = "almalinux-9"
 }
 
 resource "yandex_compute_instance" "vm" {
-  name        = "example-instance"
+  name        = "freeipa-instance"
   platform_id = "standard-v3"
 
   resources {
