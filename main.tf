@@ -1,30 +1,40 @@
-module "freeipa" {
-  source        = "git::https://github.com/patsevanton/terraform-yandex-compute.git?ref=v1.23.0"
-  image_family  = var.family_images_linux
-  subnet_id     = data.yandex_vpc_subnet.default-ru-central1-b.id
-  zone          = data.yandex_vpc_subnet.default-ru-central1-b.zone
-  name          = "freeipa"
-  hostname      = "freeipa"
-  memory        = "4"
-  is_nat        = true
-  preemptible   = false
-  core_fraction = 50
-  user          = var.ssh_user
+resource "yandex_vpc_network" "main" {
+  name = "example-network"
 }
 
-resource "local_file" "inventory_yml" {
-  content = templatefile("inventory_yml.tpl",
-    {
-      ssh_user           = var.ssh_user
-      hostname           = var.hostname
-      freeipa_public_ip  = module.freeipa.external_ip[0]
-      letsencrypt_domain = var.letsencrypt_domain
+resource "yandex_vpc_subnet" "subnet" {
+  name           = "example-subnet"
+  zone           = "ru-central1-a"
+  network_id     = yandex_vpc_network.main.id
+  v4_cidr_blocks = ["10.0.0.0/24"]
+}
+
+data "yandex_compute_image" "ubuntu" {
+  family = "ubuntu-2204-lts"
+}
+
+resource "yandex_compute_instance" "vm" {
+  name        = "example-instance"
+  platform_id = "standard-v3"
+
+  resources {
+    cores  = 2
+    memory = 4
+  }
+
+  boot_disk {
+    initialize_params {
+      image_id = data.yandex_compute_image.ubuntu.id
+      size     = 20
     }
-  )
-  filename = "inventory.yml"
-}
+  }
 
-output "freeipa_public_ip" {
-  description = "Public IP address for active directory"
-  value       = module.freeipa.external_ip[0]
+  network_interface {
+    subnet_id = yandex_vpc_subnet.subnet.id
+    nat       = true
+  }
+
+  scheduling_policy {
+    preemptible = false
+  }
 }
