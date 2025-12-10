@@ -10,7 +10,7 @@ resource "yandex_vpc_subnet" "subnet" {
 }
 
 data "yandex_compute_image" "ubuntu" {
-  family = "almalinux-9"
+  family = "almalinux-10"
 }
 
 resource "yandex_compute_instance" "vm" {
