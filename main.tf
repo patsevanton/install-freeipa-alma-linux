@@ -38,6 +38,20 @@ resource "yandex_compute_instance" "vm" {
     ssh-keys = "fedora:${file("~/.ssh/id_ed25519.pub")}"
   }
 
+  provisioner "remote-exec" {
+    connection {
+      type        = "ssh"
+      user        = "fedora"
+      host        = self.network_interface["0"].nat_ip_address
+      private_key = file("~/.ssh/id_ed25519")
+      port        = 22
+      timeout     = 1000
+    }
+    inline = [
+      "echo check connection"
+    ]
+  }
+
   scheduling_policy {
     preemptible = false
   }
