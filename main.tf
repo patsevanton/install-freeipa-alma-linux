@@ -38,21 +38,22 @@ resource "yandex_compute_instance" "vm" {
     ssh-keys = "fedora:${file("~/.ssh/id_ed25519.pub")}"
   }
 
-  provisioner "remote-exec" {
-    connection {
-      type        = "ssh"
-      user        = "fedora"
-      host        = self.network_interface["0"].nat_ip_address
-      private_key = file("~/.ssh/id_ed25519")
-      port        = 22
-      timeout     = 1000
-    }
-    inline = [
-      "echo check connection"
-    ]
-  }
-
   scheduling_policy {
     preemptible = false
   }
 }
+
+resource "null_resource" "vm" {
+  provisioner "local-exec" {
+    command = <<EOF
+      ansible-galaxy collection install freeipa.ansible_freeipa
+      ansible-playbook -i ${yandex_compute_instance.vm[*].network_interface[0].nat_ip_address}, ${path.module}/provision/playbook.yml'
+    EOF
+    environment = {
+      ANSIBLE_HOST_KEY_CHECKING  = "False"
+      ANSIBLE_CONFIG             = "${path.module}/ansible.cfg"
+    }
+  }
+  depends_on = [yandex_compute_instance.vm]
+}
+
