@@ -35,7 +35,7 @@ resource "yandex_compute_instance" "vm" {
   }
 
   metadata = {
-    ssh-keys = "almalinux:${file("~/.ssh/id_rsa.pub")}"
+    ssh-keys = "almalinux:${file("~/.ssh/id_ed25519.pub")}"
   }
 
   scheduling_policy {
