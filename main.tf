@@ -10,7 +10,7 @@ resource "yandex_vpc_subnet" "subnet" {
 }
 
 data "yandex_compute_image" "ubuntu" {
-  family = "almalinux-10"
+  family = "fedora-37"
 }
 
 resource "yandex_compute_instance" "vm" {
@@ -35,7 +35,7 @@ resource "yandex_compute_instance" "vm" {
   }
 
   metadata = {
-    ssh-keys = "almalinux:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys = "fedora:${file("~/.ssh/id_ed25519.pub")}"
   }
 
   scheduling_policy {
