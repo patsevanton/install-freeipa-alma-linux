@@ -1,6 +1,26 @@
----
-- name: Deploy FreeIPA
+- name: Install FreeIPA Server
   hosts: all
   become: true
-  roles:
-    - freeipa-server
+  collections:
+    - freeipa.ansible_freeipa
+
+  vars:
+    ipaserver_domain: example.test
+    ipaserver_realm: EXAMPLE.TEST
+    ipaserver_hostname: ipa.example.test
+    ipaserver_setup_dns: yes       # установить DNS-сервер FreeIPA
+    ipaserver_forwarders:
+      - 8.8.8.8                    # DNS forwarder (если нужен)
+    ipaserver_ds_password: SecretPassw0rd!
+    ipaserver_admin_password: SecretPassw0rd!
+
+  tasks:
+    - name: Install IPA server
+      ipaserver:
+        domain: "{{ ipaserver_domain }}"
+        realm: "{{ ipaserver_realm }}"
+        hostname: "{{ ipaserver_hostname }}"
+        dm_password: "{{ ipaserver_ds_password }}"
+        admin_password: "{{ ipaserver_admin_password }}"
+        setup_dns: "{{ ipaserver_setup_dns }}"
+        forwarders: "{{ ipaserver_forwarders }}"
