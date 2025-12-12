@@ -47,7 +47,7 @@ resource "null_resource" "vm" {
   provisioner "local-exec" {
     command = <<EOF
       ansible-galaxy collection install freeipa.ansible_freeipa
-      ansible-playbook -i ${yandex_compute_instance.vm[*].network_interface[0].nat_ip_address}, -u fedora provision/playbook.yml
+      ansible-playbook -i ${yandex_compute_instance.vm.network_interface[0].nat_ip_address}, -u fedora provision/playbook.yml
     EOF
     environment = {
       ANSIBLE_HOST_KEY_CHECKING  = "False"
