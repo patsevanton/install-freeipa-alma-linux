@@ -11,8 +11,8 @@
     ipaserver_setup_dns: true
     ipaserver_forwarders:
       - 8.8.8.8
-    ipaserver_ds_password: SecretPassw0rd!
-    ipaserver_admin_password: SecretPassw0rd!
+    ipadm_password: SecretPassw0rd!
+    ipaadmin_password: SecretPassw0rd!
 
   roles:
     - role: ipaserver
