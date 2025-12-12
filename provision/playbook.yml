@@ -17,6 +17,7 @@
   tasks:
     - name: Install IPA server
       ipaserver:
+        name: "{{ ipaserver_hostname }}"  # <- добавлен обязательный параметр
         domain: "{{ ipaserver_domain }}"
         realm: "{{ ipaserver_realm }}"
         hostname: "{{ ipaserver_hostname }}"
