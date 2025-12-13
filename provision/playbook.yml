@@ -22,11 +22,11 @@
     - name: 'Add association between external ip and ipa domain into etc/hosts'
       lineinfile:
         path: '/etc/hosts'
-        line: '{{ ipaserver_ip_addresses|first }} freeipa.{{ ipaserver_domain }} freeipa'
+        line: '{{ ipaserver_ip_addresses|first }} ipa.{{ ipaserver_domain }} ipa'
         insertbefore: BOF
     - name: Set hostname
       ansible.builtin.command:
-        cmd: hostnamectl set-hostname --static "freeipa.{{ ipaserver_domain }}"
+        cmd: hostnamectl set-hostname --static "ipa.{{ ipaserver_domain }}"
       become: True
     - name: Reboot machine and send a message
       ansible.builtin.reboot:
