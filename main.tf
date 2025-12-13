@@ -41,6 +41,18 @@ resource "yandex_compute_instance" "vm" {
   scheduling_policy {
     preemptible = false
   }
+
+  connection {
+    type        = "ssh"
+    user        = "fedora"
+    host        = self.network_interface[0].nat_ip_address
+    private_key = file("~/.ssh/id_ed25519")
+    timeout     = "10m"
+  }
+
+  provisioner "remote-exec" {
+    inline = ["echo 'SSH connection established'"]
+  }
 }
 
 resource "null_resource" "vm" {
@@ -56,4 +68,3 @@ resource "null_resource" "vm" {
   }
   depends_on = [yandex_compute_instance.vm]
 }
-
