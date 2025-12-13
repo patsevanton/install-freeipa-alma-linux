@@ -7,7 +7,7 @@ all:
   vars:
     ansible_user:  ${ssh_user}
     ipaadmin_password: ADMPassword1
-    ipadm_password: DMPassword1
+    ipadm_password: ADMPassword1
     ipaserver_no_host_dns: true
     ipaserver_ip_addresses:
       - '{{ ansible_default_ipv4.address|default(ansible_all_ipv4_addresses[0]) }}'
