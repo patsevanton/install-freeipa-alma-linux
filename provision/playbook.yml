@@ -1,18 +1,75 @@
-- name: Install FreeIPA Server
-  hosts: all
+# - name: Install FreeIPA Server
+#   hosts: all
+#   become: true
+#   collections:
+#     - freeipa.ansible_freeipa
+
+
+---
+- name: Playbook to configure IPA servers
+  hosts: ipaserver
   become: true
   collections:
     - freeipa.ansible_freeipa
-
-  vars:
-    ipaserver_domain: example.test
-    ipaserver_realm: EXAMPLE.TEST
-    ipaserver_hostname: ipa.example.test
-    ipaserver_setup_dns: true
-    ipaserver_forwarders:
-      - 8.8.8.8
-    ipadm_password: SecretPassw0rd!
-    ipaadmin_password: SecretPassw0rd!
-
+  pre_tasks:
+    - set_fact:
+        ipaserver_realm: "{{ ipaserver_realm|upper }}"
+    - name: Remove 127.0.1.1 from /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        state: absent
+        regexp: '^127.0.1.1'
+    - name: 'Add association between external ip and ipa domain into etc/hosts'
+      lineinfile:
+        path: '/etc/hosts'
+        line: '{{ ipaserver_ip_addresses|first }} freeipa.{{ ipaserver_domain }} freeipa'
+        insertbefore: BOF
+    - name: Set hostname
+      ansible.builtin.command:
+        cmd: hostnamectl set-hostname --static "freeipa.{{ ipaserver_domain }}"
+      become: True
+    - name: Reboot machine and send a message
+      ansible.builtin.reboot:
+        msg: "Rebooting machine in 5 seconds"
+    - name: Install packages bind-utils git nano
+      become: true
+      package:
+        name:
+          - bind-utils
+          - git
+          - nano
+          - vim
+        state: present
+    - name: Retrieve hostname from IP address.
+      command: dig +short +onesoa -x "{{ ansible_default_ipv4.address }}"
+      register: dig_out
+    - name: Provide reverse_hostname fact.
+      set_fact:
+        reverse_hostname: "{{ dig_out.stdout_lines[0][:-1] }}"
+    - name: Print reverse_hostname
+      debug:
+        var: reverse_hostname
+    - name: Disable SELinux
+      ansible.posix.selinux:
+        state: disabled
+    - name: Get domainname
+      command: hostname -d
+      register: domainname_output
+    - name: Display domainname
+      debug:
+        msg: "Domainname is {{ domainname_output.stdout }}"
+    - name: Get hostname
+      shell: hostname
+      register: hostname_output
+    - name: Display hostname
+      debug:
+        msg: "Hostname is {{ hostname_output.stdout }}"
+    - name: Reboot machine and send a message
+      ansible.builtin.reboot:
+        msg: "Rebooting machine in 5 seconds"
   roles:
-    - role: ipaserver
+    - role: freeipa.ansible_freeipa.ipaserver
+      state: present
+
+  # roles:
+  #   - role: ipaserver

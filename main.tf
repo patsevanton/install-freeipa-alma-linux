@@ -59,7 +59,7 @@ resource "null_resource" "vm" {
   provisioner "local-exec" {
     command = <<EOF
       ansible-galaxy collection install freeipa.ansible_freeipa
-      ansible-playbook -i ${yandex_compute_instance.vm.network_interface[0].nat_ip_address}, -u fedora provision/playbook.yml
+      ansible-playbook -i inventory.yml provision/playbook.yml
     EOF
     environment = {
       ANSIBLE_HOST_KEY_CHECKING  = "False"
@@ -67,4 +67,16 @@ resource "null_resource" "vm" {
     }
   }
   depends_on = [yandex_compute_instance.vm]
+}
+
+
+resource "local_file" "inventory_yml" {
+  content = templatefile("inventory_yml.tpl",
+    {
+      hostname           = "freeipa-instance"
+      ssh_user           = "fedora"
+      freeipa_public_ip  = yandex_compute_instance.vm.network_interface[0].nat_ip_address
+    }
+  )
+  filename = "inventory.yml"
 }

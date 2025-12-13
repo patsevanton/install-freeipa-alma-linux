@@ -1,0 +1,20 @@
+all:
+  children:
+    ipaserver:
+      hosts:
+        "freeipa-instance":
+          ansible_host: "178.154.205.117"
+  vars:
+    ansible_user:  fedora
+    ipaadmin_password: ADMPassword1
+    ipadm_password: DMPassword1
+    ipaserver_no_host_dns: true
+    ipaserver_ip_addresses:
+      - '{{ ansible_default_ipv4.address|default(ansible_all_ipv4_addresses[0]) }}'
+    ipaserver_domain: apatsev.corp
+    ipaserver_realm: APATSEV.CORP
+    ipaserver_hostname: ipa.apatsev.corp
+    ipaserver_setup_dns: true
+    ipaserver_forwarders:
+      - 8.8.8.8
+
