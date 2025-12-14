@@ -25,11 +25,8 @@ FreeIPA:
 * DNS: `apatsev.corp`
 * Hostname: `ipa.apatsev.corp`
 * Realm: `APATSEV.CORP`
-* IP: `89.169.132.151`
 
 Развёртывание выполняется через **Ansible** с использованием inventory-файла.
-
-
 
 ## Используемый inventory.yml
 
@@ -39,7 +36,7 @@ all:
     ipaserver:
       hosts:
         freeipa-instance:
-          ansible_host: 89.169.132.151
+          ansible_host: ip
 
   vars:
     ansible_user: fedora
@@ -69,7 +66,7 @@ all:
 ### Что здесь происходит
 
 * **FreeIPA** — это центр управления идентификацией (LDAP + Kerberos + DNS + CA).
-* По умолчанию FreeIPA поднимает **собственный CA**, но в продакшене это часто запрещено.
+* По умолчанию FreeIPA поднимает **собственный CA**, но чаще нужно использовать корпоравный CA.
 * Поэтому мы используем **внешний сертификат**, выпущенный собственной PKI.
 
 ### Почему двухуровневая PKI
