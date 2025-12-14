@@ -2,15 +2,13 @@
 
 ## Цель
 
-Развернуть сервер **FreeIPA** с использованием **внешнего TLS-сертификата**, выпущенного собственной двухуровневой PKI (Root CA + Intermediate CA), созданной через OpenSSL.
+Развернуть сервер **FreeIPA** с использованием **внешнего TLS‑сертификата**, выпущенного собственной двухуровневой PKI (Root CA + Intermediate CA), созданной через OpenSSL.
 
 В результате:
-
 * FreeIPA работает с сертификатом, выпущенным **не встроенным CA**, а внешним;
 * есть контролируемая цепочка доверия;
 * корневой ключ не используется в продакшене;
 * сертификаты можно обновлять и отзывать независимо от FreeIPA.
-
 
 ## Обзор архитектуры
 
@@ -21,22 +19,21 @@ Root CA (apatsev.corp)
 ```
 
 FreeIPA:
-
 * DNS: `apatsev.corp`
 * Hostname: `ipa.apatsev.corp`
 * Realm: `APATSEV.CORP`
 
 ## Комментарии для начинающих DevOps
 
-* **FreeIPA** — это центр управления идентификацией (LDAP + Kerberos + DNS + CA).
-* По умолчанию FreeIPA поднимает **собственный CA**, но чаще нужно использовать корпоравный CA.
+* **FreeIPA** — это центр управления идентификацией (LDAP + Kerberos + DNS + CA).
+* По умолчанию FreeIPA поднимает **собственный CA**, но чаще нужно использовать корпоративный CA.
 * Поэтому мы используем **внешний сертификат**, выпущенный собственной PKI.
 
 ### Почему двухуровневая PKI
 
-* Root CA хранится оффлайн
-* Intermediate CA используется для выпуска сертификатов
-* В случае компрометации Intermediate CA — Root остаётся безопасным
+* Root CA хранится оффлайн.
+* Intermediate CA используется для выпуска сертификатов.
+* В случае компрометации Intermediate CA — Root остаётся безопасным.
 
 ## Предварительные требования
 
@@ -45,19 +42,18 @@ FreeIPA:
 * `ansible >= 2.14`
 * `openssl`
 * `python3`
-* SSH-доступ к серверу FreeIPA
+* SSH‑доступ к серверу FreeIPA
 
 ### На сервере FreeIPA
 
-* Fedora / Rocky / Alma / RHEL
+* Fedora / Rocky / Alma / RHEL
 * Открыты порты:
-
   * 80, 443
   * 389, 636
   * 88, 464
   * 53 (TCP/UDP)
 
-## Шаг 1. Подготовка сервера FreeIPA
+## Шаг 1. Подготовка сервера FreeIPA
 
 На сервере:
 
@@ -77,13 +73,13 @@ hostname -f
 ipa.apatsev.corp
 ```
 
-## Шаг 2. Создание корневого и промежуточного CA (OpenSSL)
+## Шаг 2. Создание корневого и промежуточного CA (OpenSSL)
 
 > **Этот шаг выполняется НЕ на сервере FreeIPA**, а на отдельной защищённой машине.
 
-### 2.1 Создание Root CA
+### 2.1 Создание Root CA
 
-#### Конфигурация Root CA
+#### Конфигурация Root CA
 
 ```bash
 cat <<EOF > rootCA.cnf
@@ -123,7 +119,7 @@ openssl req -x509 -new -key rootCA.key \
   -config rootCA.cnf -extensions v3_ca
 ```
 
-### 2.2 Создание Intermediate CA
+### 2.2 Создание Intermediate CA
 
 #### Ключ
 
@@ -164,7 +160,7 @@ openssl req -new \
   -config intermediateCA.cnf
 ```
 
-#### Подписание Root CA
+#### Подписание Root CA
 
 ```bash
 openssl x509 -req \
@@ -185,7 +181,7 @@ openssl x509 -req \
 openssl verify -CAfile rootCA.crt intermediateCA.crt
 ```
 
-## Шаг 3. Выпуск сертификата для FreeIPA
+## Шаг 3. Выпуск сертификата для FreeIPA
 
 ### 3.1 Ключ для FreeIPA
 
@@ -222,7 +218,7 @@ openssl req -new \
   -config ipa.cnf
 ```
 
-### 3.3 Подписание Intermediate CA
+### 3.3 Подписание Intermediate CA
 
 ```bash
 openssl x509 -req \
@@ -242,8 +238,7 @@ openssl x509 -req \
 ```bash
 cat ipa.apatsev.corp.crt intermediateCA.crt rootCA.crt > ipa-fullchain.crt
 ```
-
-## Шаг 4. Установка FreeIPA с внешним сертификатом (Ansible)
+## Шаг 4. Установка FreeIPA с внешним сертификатом (Ansible)
 
 ### 4.1 Установка ролей
 
@@ -251,61 +246,174 @@ cat ipa.apatsev.corp.crt intermediateCA.crt rootCA.crt > ipa-fullchain.crt
 ansible-galaxy collection install freeipa.ansible_freeipa
 ```
 
-Развёртывание выполняется через **Ansible** с использованием inventory-файла.
+Развёртывание выполняется через **Ansible** с использованием inventory‑файла.
 
-## Используемый inventory.yml
+### 4.2 Подготовка файлов сертификата для Ansible
+
+Перед установкой необходимо разместить файлы сертификата на управляющей машине в доступном для плейбука месте. Рекомендуемая структура:
+
+```
+files/
+├── ipa.apatsev.corp.key
+├── ipa-fullchain.crt
+└── intermediateCA.crt
+```
+
+Убедитесь, что:
+* `ipa.apatsev.corp.key` — приватный ключ сервера;
+* `ipa-fullchain.crt` — полная цепочка (сертификат сервера + промежуточный CA + корневой CA);
+* `intermediateCA.crt` — отдельный файл промежуточного CA (потребуется для настройки доверия).
+
+### 4.3 Корректировка playbook.yaml
+
+Ниже приведён исправленный вариант плейбука `install-ipa.yml` с поддержкой внешнего сертификата:
 
 ```yaml
-all:
-  children:
-    ipaserver:
-      hosts:
-        freeipa-instance:
-          ansible_host: ip
-
+---
+- name: Install FreeIPA server with external CA
+  hosts: ipaserver
+  become: true
   vars:
-    ansible_user: fedora
+    ipaserver_external_ca: true
+    ipaserver_cert_file: "/tmp/ipa-fullchain.crt"
+    ipaserver_key_file: "/tmp/ipa.apatsev.corp.key"
+    ipaserver_ca_cert_file: "/tmp/intermediateCA.crt"
 
-    # Пароли FreeIPA
-    ipaadmin_password: ADMPassword1
-    ipadm_password: ADMPassword1
+  pre_tasks:
+    - name: Copy certificate files to target host
+      copy:
+        src: "files/{{ item }}"
+        dest: "/tmp/{{ item }}"
+      loop:
+        - ipa.apatsev.corp.key
+        - ipa-fullchain.crt
+        - intermediateCA.crt
+      mode: '0600'
 
-    # Сетевые настройки
-    ipaserver_no_host_dns: true
-    ipaserver_ip_addresses:
-      - "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+  roles:
+    - role: freeipa.ansible_freeipa.ipaserver
+      vars:
+        ipaserver_setup_adtrust: false
+        ipaserver_setup_kra: true
+        ipaserver_setup_dns: true
+        ipaserver_domain: "{{ ipaserver_domain }}"
+        ipaserver_realm: "{{ ipaserver_realm }}"
+        ipaserver_hostname: "{{ ipaserver_hostname }}"
+        ipaserver_ip_addresses: "{{ ipaserver_ip_addresses }}"
+        ipaadmin_password: "{{ ipaadmin_password }}"
+        ipadm_password: "{{ ipadm_password }}"
+        ipaserver_no_host_dns: "{{ ipaserver_no_host_dns | default(false) }}"
+        ipaserver_forwarders: "{{ ipaserver_forwarders | default([]) }}"
+        # Параметры внешнего CA
+        ipaserver_external_ca: "{{ ipaserver_external_ca }}"
+        ipaserver_cert_file: "{{ ipaserver_cert_file }}"
+        ipaserver_key_file: "{{ ipaserver_key_file }}"
+        ipaserver_ca_cert_file: "{{ ipaserver_ca_cert_file }}"
 
-    # Доменные параметры FreeIPA
-    ipaserver_domain: apatsev.corp
-    ipaserver_realm: APATSEV.CORP
-    ipaserver_hostname: ipa.apatsev.corp
-
-    # DNS
-    ipaserver_setup_dns: true
-    ipaserver_forwarders:
-      - 8.8.8.8
+  post_tasks:
+    - name: Remove temporary certificate files
+      file:
+        path: "/tmp/{{ item }}"
+        state: absent
+      loop:
+        - ipa.apatsev.corp.key
+        - ipa-fullchain.crt
+        - intermediateCA.crt
 ```
 
-### 4.3 Установка FreeIPA без встроенного CA
+**Пояснения к ключевым параметрам:**
+* `ipaserver_external_ca: true` — указывает на использование внешнего CA;
+* `ipaserver_cert_file` — путь к полной цепочке сертификатов на целевом хосте;
+* `ipaserver_key_file` — путь к приватному ключу на целевом хосте;
+* `ipaserver_ca_cert_file` — путь к сертификату промежуточного CA (нужен для настройки доверия в системе).
+
+### 4.4 Запуск установки
+
+Выполните плейбук с указанием inventory:
 
 ```bash
-ansible-playbook install-ipa.yml \
-  --extra-vars "ipaserver_external_ca=true"
+ansible-playbook -i inventory.yml install-ipa.yml
 ```
 
-## Проверка
+### 4.5 Проверка корректности установки
 
+После завершения установки выполните следующие проверки:
+
+1. **Проверка TLS‑соединения:**
 ```bash
 openssl s_client -connect ipa.apatsev.corp:443 -showcerts
 ```
+В выводе должны присутствовать:
+* сертификат сервера (`ipa.apatsev.corp`);
+* промежуточный CA (`intermediate.apatsev.corp Intermediate CA`);
+* корневой CA (`apatsev.corp Root CA`).
 
+2. **Проверка состояния FreeIPA:**
 ```bash
 ipa healthcheck
 ```
+Ожидаемый результат — отсутствие критических ошибок.
+
+3. **Проверка цепочки доверия:**
+```bash
+certutil -L -d /etc/dirsrv/slapd-APATSEV-CORP/
+```
+Убедитесь, что в списке есть все необходимые сертификаты.
+
+## Шаг 5. Дополнительные настройки (опционально)
+
+### 5.1 Настройка доверия к корневому CA
+
+Чтобы клиенты системы доверяли сертификатам из вашей PKI, установите корневой CA на все машины домена:
+
+```bash
+sudo cp rootCA.crt /etc/pki/ca-trust/source/anchors/
+sudo update-ca-trust
+```
+
+### 5.2 Автоматизация обновления сертификатов
+
+Для планового обновления сертификатов:
+1. Повторите шаги **3.1–3.4** для генерации нового сертификата.
+2. Замените файлы в директории `files/`.
+3. Выполните плейбук повторно (Ansible обновит сертификаты без пересоздания сервера).
+
+## Шаг 6. Устранение типичных проблем
+
+### Проблема 1: Ошибка «Certificate signature verification failed»
+
+**Причина:** Некорректная цепочка сертификатов или отсутствие промежуточного CA.
+
+**Решение:**
+1. Проверьте содержимое `ipa-fullchain.crt`:
+```bash
+openssl crl2pkcs7 -certfile ipa-fullchain.crt -out chain.p7b -nocrl
+openssl pkcs7 -in chain.p7b -print_certs -text -noout
+```
+2. Убедитесь, что все сертификаты присутствуют и валидны.
+
+### Проблема 2: Ошибка «Private key does not match certificate»
+
+**Причина:** Несоответствие приватного ключа и сертификата.
+
+**Решение:**
+1. Проверьте соответствие:
+```bash
+openssl x509 -noout -modulus -in ipa.apatsev.corp.crt | openssl md5
+openssl rsa -noout -modulus -in ipa.apatsev.corp.key | openssl md5
+```
+2. Если хеши не совпадают — пересоздайте пару ключ/сертификат.
+
+### Проблема 3: Ошибка «CA certificate not found»
+
+**Причина:** Отсутствует сертификат промежуточного CA в настройках.
+
+**Решение:** Убедитесь, что параметр `ipaserver_ca_cert_file` указывает на корректный файл промежуточного CA.
 
 ## Результат
 
-FreeIPA развернут
-Используется внешний TLS-сертификат
-Собственная PKI с Root + Intermediate
-Готово к продакшену
+После выполнения всех шагов:
+* FreeIPA развёрнут с использованием внешнего TLS‑сертификата;
+* цепочка доверия контролируется вашей PKI (Root CA + Intermediate CA);
+* сервер готов к работе в продакшен‑среде;
+* сертификаты можно обновлять без остановки сервиса.
