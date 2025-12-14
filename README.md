@@ -26,44 +26,9 @@ FreeIPA:
 * Hostname: `ipa.apatsev.corp`
 * Realm: `APATSEV.CORP`
 
-Развёртывание выполняется через **Ansible** с использованием inventory-файла.
 
-## Используемый inventory.yml
-
-```yaml
-all:
-  children:
-    ipaserver:
-      hosts:
-        freeipa-instance:
-          ansible_host: ip
-
-  vars:
-    ansible_user: fedora
-
-    # Пароли FreeIPA
-    ipaadmin_password: ADMPassword1
-    ipadm_password: ADMPassword1
-
-    # Сетевые настройки
-    ipaserver_no_host_dns: true
-    ipaserver_ip_addresses:
-      - "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
-
-    # Доменные параметры FreeIPA
-    ipaserver_domain: apatsev.corp
-    ipaserver_realm: APATSEV.CORP
-    ipaserver_hostname: ipa.apatsev.corp
-
-    # DNS
-    ipaserver_setup_dns: true
-    ipaserver_forwarders:
-      - 8.8.8.8
-```
 
 ## Комментарии для начинающих DevOps
-
-### Что здесь происходит
 
 * **FreeIPA** — это центр управления идентификацией (LDAP + Kerberos + DNS + CA).
 * По умолчанию FreeIPA поднимает **собственный CA**, но чаще нужно использовать корпоравный CA.
@@ -286,6 +251,41 @@ cat ipa.apatsev.corp.crt intermediateCA.crt rootCA.crt > ipa-fullchain.crt
 
 ```bash
 ansible-galaxy collection install freeipa.ansible_freeipa
+```
+
+Развёртывание выполняется через **Ansible** с использованием inventory-файла.
+
+## Используемый inventory.yml
+
+```yaml
+all:
+  children:
+    ipaserver:
+      hosts:
+        freeipa-instance:
+          ansible_host: ip
+
+  vars:
+    ansible_user: fedora
+
+    # Пароли FreeIPA
+    ipaadmin_password: ADMPassword1
+    ipadm_password: ADMPassword1
+
+    # Сетевые настройки
+    ipaserver_no_host_dns: true
+    ipaserver_ip_addresses:
+      - "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+
+    # Доменные параметры FreeIPA
+    ipaserver_domain: apatsev.corp
+    ipaserver_realm: APATSEV.CORP
+    ipaserver_hostname: ipa.apatsev.corp
+
+    # DNS
+    ipaserver_setup_dns: true
+    ipaserver_forwarders:
+      - 8.8.8.8
 ```
 
 ### 4.3 Установка FreeIPA без встроенного CA
