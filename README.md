@@ -26,8 +26,6 @@ FreeIPA:
 * Hostname: `ipa.apatsev.corp`
 * Realm: `APATSEV.CORP`
 
-
-
 ## Комментарии для начинающих DevOps
 
 * **FreeIPA** — это центр управления идентификацией (LDAP + Kerberos + DNS + CA).
