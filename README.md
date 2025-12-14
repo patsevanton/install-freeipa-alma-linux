@@ -288,45 +288,11 @@ cat ipa.apatsev.corp.crt intermediateCA.crt rootCA.crt > ipa-fullchain.crt
 ansible-galaxy collection install freeipa.ansible_freeipa
 ```
 
-### 4.2 Playbook
-
-```yaml
-- hosts: ipaserver
-  become: true
-  roles:
-    - role: freeipa.ansible_freeipa.ipaserver
-```
-
 ### 4.3 Установка FreeIPA без встроенного CA
 
 ```bash
 ansible-playbook install-ipa.yml \
   --extra-vars "ipaserver_external_ca=true"
-```
-
-## Шаг 5. Импорт внешнего сертификата в FreeIPA
-
-Скопировать сертификаты на сервер:
-
-```bash
-scp ipa.apatsev.corp.key ipa-fullchain.crt rootCA.crt fedora@ipa.apatsev.corp:/tmp
-```
-
-На сервере:
-
-```bash
-sudo ipa-server-certinstall \
-  -w /tmp/ipa-fullchain.crt \
-  -k /tmp/ipa.apatsev.corp.key \
-  --pin='' \
-  --dirman-password ADMPassword1
-```
-
-Добавить Root CA в trust store:
-
-```bash
-sudo ipa-cacert-manage install /tmp/rootCA.crt -t C,,
-sudo ipa-certupdate
 ```
 
 ## Проверка
