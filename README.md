@@ -1,35 +1,135 @@
- 
-# Инструкция по настройке 
+Ниже — **переписанная и дополненная инструкция**, логически связанная с твоим `inventory.yml` и с конечной целью: **развернуть FreeIPA и подключить к нему внешний сертификат, выпущенный через собственную PKI (Root + Intermediate CA)**.
 
-## Цель:
+Я аккуратно привёл текст в порядок, добавил недостающие шаги и пояснения именно под **FreeIPA + Ansible**.
 
-## Обзор
 
-Эта инструкция представляет собой полное руководство по развертыванию одвухуровневой Public Key Infrastructure (PKI). Корневой сертификат и промежуточный CA создаются через OpenSSL.
+# Инструкция по настройке FreeIPA с внешним сертификатом
 
-**План:**
+## Цель
 
-2.  **Создание корневого и промежуточного сертификатов через OpenSSL:** Генерация корневого сертификата `apatsev.corp` и промежуточного CA `intermediate.apatsev.corp` с помощью OpenSSL.
-3.  **Импорт промежуточного сертификата в Vault:** Настройка PKI-движка в Vault для промежуточного CA.
+Развернуть сервер **FreeIPA** с использованием **внешнего TLS-сертификата**, выпущенного собственной двухуровневой PKI (Root CA + Intermediate CA), созданной через OpenSSL.
+
+В результате:
+
+* FreeIPA работает с сертификатом, выпущенным **не встроенным CA**, а внешним;
+* есть контролируемая цепочка доверия;
+* корневой ключ не используется в продакшене;
+* сертификаты можно обновлять и отзывать независимо от FreeIPA.
+
+
+## Обзор архитектуры
+
+```
+Root CA (apatsev.corp)
+ └── Intermediate CA (intermediate.apatsev.corp)
+     └── TLS-сертификат FreeIPA (ipa.apatsev.corp)
+```
+
+FreeIPA:
+
+* DNS: `apatsev.corp`
+* Hostname: `ipa.apatsev.corp`
+* Realm: `APATSEV.CORP`
+* IP: `89.169.132.151`
+
+Развёртывание выполняется через **Ansible** с использованием inventory-файла.
+
+
+
+## Используемый inventory.yml
+
+```yaml
+all:
+  children:
+    ipaserver:
+      hosts:
+        freeipa-instance:
+          ansible_host: 89.169.132.151
+
+  vars:
+    ansible_user: fedora
+
+    # Пароли FreeIPA
+    ipaadmin_password: ADMPassword1
+    ipadm_password: ADMPassword1
+
+    # Сетевые настройки
+    ipaserver_no_host_dns: true
+    ipaserver_ip_addresses:
+      - "{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+
+    # Доменные параметры FreeIPA
+    ipaserver_domain: apatsev.corp
+    ipaserver_realm: APATSEV.CORP
+    ipaserver_hostname: ipa.apatsev.corp
+
+    # DNS
+    ipaserver_setup_dns: true
+    ipaserver_forwarders:
+      - 8.8.8.8
+```
+
 ## Комментарии для начинающих DevOps
 
-Перед началом, несколько ключевых концепций, которые помогут понять происходящее:
+### Что здесь происходит
 
-*   **PKI (Public Key Infrastructure)** — это набор технологий, позволяющих выпускать и управлять цифровыми сертификатами. Вместо одного сертификата используется цепочка доверия: **Корневой CA -Промежуточный CA -Сертификат услуги**. Это повышает безопасность: корневой ключ хранится в сейфе и используется редко, а промежуточный — для повседневных задач.
+* **FreeIPA** — это центр управления идентификацией (LDAP + Kerberos + DNS + CA).
+* По умолчанию FreeIPA поднимает **собственный CA**, но в продакшене это часто запрещено.
+* Поэтому мы используем **внешний сертификат**, выпущенный собственной PKI.
 
+### Почему двухуровневая PKI
+
+* Root CA хранится оффлайн
+* Intermediate CA используется для выпуска сертификатов
+* В случае компрометации Intermediate CA — Root остаётся безопасным
 
 ## Предварительные требования
 
-*   Установленные утилиты командной строки: ``, ``, `openssl`, ``, ``.
+### На управляющей машине (Ansible host)
 
-### **Шаг 2: Создание корневого и промежуточного сертификатов через OpenSSL**
+* `ansible >= 2.14`
+* `openssl`
+* `python3`
+* SSH-доступ к серверу FreeIPA
 
-**Пояснение:** Мы создаём двухуровневую PKI. Корневой сертификат (Root CA) — это корень доверия. Его приватный ключ должен храниться максимально защищённо (оффлайн). Промежуточный сертификат (Intermediate CA) подписан корневым и используется для ежедневной выдачи сертификатов. Если он скомпрометирован, мы отзываем его, не трогая корневой.
+### На сервере FreeIPA
 
-**2.1. Создание корневого сертификата через OpenSSL:**
-*Корневой сертификат является корнем доверия всей инфраструктуры. Его закрытый ключ должен храниться в безопасном месте, в идеале — оффлайн.*
+* Fedora / Rocky / Alma / RHEL
+* Открыты порты:
 
-**Создание конфигурационного файла для корневого CA:**
+  * 80, 443
+  * 389, 636
+  * 88, 464
+  * 53 (TCP/UDP)
+
+## Шаг 1. Подготовка сервера FreeIPA
+
+На сервере:
+
+```bash
+sudo hostnamectl set-hostname ipa.apatsev.corp
+```
+
+Проверь:
+
+```bash
+hostname -f
+```
+
+Должно быть:
+
+```
+ipa.apatsev.corp
+```
+
+## Шаг 2. Создание корневого и промежуточного CA (OpenSSL)
+
+> **Этот шаг выполняется НЕ на сервере FreeIPA**, а на отдельной защищённой машине.
+
+### 2.1 Создание Root CA
+
+#### Конфигурация Root CA
+
 ```bash
 cat <<EOF > rootCA.cnf
 [ req ]
@@ -53,30 +153,31 @@ authorityKeyIdentifier = keyid:always,issuer
 EOF
 ```
 
-**Генерация приватного ключа для корневого CA:**
+#### Генерация ключа
+
 ```bash
 openssl genrsa -out rootCA.key 4096
 ```
 
-**Создание самоподписанного корневого сертификата:**
+#### Самоподписанный сертификат
+
 ```bash
-openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 3650 -out rootCA.crt -config rootCA.cnf -extensions v3_ca
+openssl req -x509 -new -key rootCA.key \
+  -sha256 -days 3650 \
+  -out rootCA.crt \
+  -config rootCA.cnf -extensions v3_ca
 ```
 
-**Проверка:**
-```bash
-openssl x509 -in rootCA.crt -text -noout | grep "Subject:"
-```
+### 2.2 Создание Intermediate CA
 
-**2.2. Создание промежуточного сертификата через OpenSSL:**
-*Промежуточный сертификат будет использоваться Vault для ежедневного выпуска сертификатов, что ограничивает риск компрометации корневого ключа.*
+#### Ключ
 
-**Генерация приватного ключа для промежуточного CA:**
 ```bash
 openssl genrsa -out intermediateCA.key 4096
 ```
 
-**Создание конфигурационного файла для промежуточного CA:**
+#### Конфигурация
+
 ```bash
 cat <<EOF > intermediateCA.cnf
 [ req ]
@@ -96,33 +197,159 @@ basicConstraints = critical, CA:TRUE, pathlen:0
 keyUsage = critical, digitalSignature, cRLSign, keyCertSign
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid:always,issuer
-authorityInfoAccess = @issuer_info
-crlDistributionPoints = @crl_info
-
-[ issuer_info ]
-caIssuers;URI.0 = http://vault.apatsev.corp/v1/pki/ca
-
-[ crl_info ]
-URI.0 = http://vault.apatsev.corp/v1/pki/crl
 EOF
 ```
 
-**Примечание:** Расширения `authorityInfoAccess` и `crlDistributionPoints` критически важны. Они указывают клиентам (браузерам, ОС) где искать цепочку сертификатов (CA Issuers) и списки отозванных сертификатов (CRL). Мы указываем будущий внешний URL Vault.
+#### CSR
 
-**Создание CSR (Certificate Signing Request) для промежуточного CA:**
 ```bash
-openssl req -new -key intermediateCA.key -out intermediateCA.csr -config intermediateCA.cnf
+openssl req -new \
+  -key intermediateCA.key \
+  -out intermediateCA.csr \
+  -config intermediateCA.cnf
 ```
 
-**Подписание промежуточного CA корневым сертификатом:**
+#### Подписание Root CA
+
 ```bash
-openssl x509 -req -in intermediateCA.csr \
-  -CA rootCA.crt -CAkey rootCA.key -CAcreateserial \
-  -out intermediateCA.crt -days 1825 -sha256 \
-  -extfile intermediateCA.cnf -extensions v3_intermediate_ca
+openssl x509 -req \
+  -in intermediateCA.csr \
+  -CA rootCA.crt \
+  -CAkey rootCA.key \
+  -CAcreateserial \
+  -out intermediateCA.crt \
+  -days 1825 \
+  -sha256 \
+  -extfile intermediateCA.cnf \
+  -extensions v3_intermediate_ca
 ```
 
-**Проверка цепочки сертификатов:**
+#### Проверка
+
 ```bash
 openssl verify -CAfile rootCA.crt intermediateCA.crt
 ```
+
+## Шаг 3. Выпуск сертификата для FreeIPA
+
+### 3.1 Ключ для FreeIPA
+
+```bash
+openssl genrsa -out ipa.apatsev.corp.key 4096
+```
+
+### 3.2 CSR для FreeIPA
+
+```bash
+cat <<EOF > ipa.cnf
+[ req ]
+prompt = no
+distinguished_name = dn
+req_extensions = req_ext
+
+[ dn ]
+CN = ipa.apatsev.corp
+O = MyCompany
+
+[ req_ext ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = ipa.apatsev.corp
+DNS.2 = ipa
+EOF
+```
+
+```bash
+openssl req -new \
+  -key ipa.apatsev.corp.key \
+  -out ipa.apatsev.corp.csr \
+  -config ipa.cnf
+```
+
+### 3.3 Подписание Intermediate CA
+
+```bash
+openssl x509 -req \
+  -in ipa.apatsev.corp.csr \
+  -CA intermediateCA.crt \
+  -CAkey intermediateCA.key \
+  -CAcreateserial \
+  -out ipa.apatsev.corp.crt \
+  -days 825 \
+  -sha256 \
+  -extensions req_ext \
+  -extfile ipa.cnf
+```
+
+### 3.4 Сборка цепочки
+
+```bash
+cat ipa.apatsev.corp.crt intermediateCA.crt rootCA.crt > ipa-fullchain.crt
+```
+
+## Шаг 4. Установка FreeIPA с внешним сертификатом (Ansible)
+
+### 4.1 Установка ролей
+
+```bash
+ansible-galaxy collection install freeipa.ansible_freeipa
+```
+
+### 4.2 Playbook
+
+```yaml
+- hosts: ipaserver
+  become: true
+  roles:
+    - role: freeipa.ansible_freeipa.ipaserver
+```
+
+### 4.3 Установка FreeIPA без встроенного CA
+
+```bash
+ansible-playbook install-ipa.yml \
+  --extra-vars "ipaserver_external_ca=true"
+```
+
+## Шаг 5. Импорт внешнего сертификата в FreeIPA
+
+Скопировать сертификаты на сервер:
+
+```bash
+scp ipa.apatsev.corp.key ipa-fullchain.crt rootCA.crt fedora@ipa.apatsev.corp:/tmp
+```
+
+На сервере:
+
+```bash
+sudo ipa-server-certinstall \
+  -w /tmp/ipa-fullchain.crt \
+  -k /tmp/ipa.apatsev.corp.key \
+  --pin='' \
+  --dirman-password ADMPassword1
+```
+
+Добавить Root CA в trust store:
+
+```bash
+sudo ipa-cacert-manage install /tmp/rootCA.crt -t C,,
+sudo ipa-certupdate
+```
+
+## Проверка
+
+```bash
+openssl s_client -connect ipa.apatsev.corp:443 -showcerts
+```
+
+```bash
+ipa healthcheck
+```
+
+## Результат
+
+FreeIPA развернут
+Используется внешний TLS-сертификат
+Собственная PKI с Root + Intermediate
+Готово к продакшену
